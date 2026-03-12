@@ -1,11 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
-import './App.css';
-import logo from './logo.png';
+import '../../client/src/styles/App.css';
+import logo from './images/logo.png';
 
 const API_NOTES = 'http://localhost:5000/api/notes';
-const API_USER = 'http://localhost:5000/api/user';
 const UPLOADS = 'http://localhost:5000/uploads/';
 
 /* ========== Toast System ========== */
@@ -30,148 +29,6 @@ function ToastContainer({ toasts }) {
         ))}
       </AnimatePresence>
     </div>
-  );
-}
-
-/* ========== Profile Modal ========== */
-function ProfileModal({ user, onSave, onCancel, isSaving, setUser, showToast, fetchData }) {
-  const [formData, setFormData] = useState({
-    name: user?.name || '',
-    email: user?.email || '',
-    phone: user?.phone || '',
-  });
-  const [picFile, setPicFile] = useState(null);
-  const [preview, setPreview] = useState(user?.profilePicture ? `${UPLOADS}${user.profilePicture}` : null);
-  const [showConfirmPhoto, setShowConfirmPhoto] = useState(false);
-  const [removePhoto, setRemovePhoto] = useState(false);
-
-  const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
-
-  const handleRemovePhoto = () => {
-    setShowConfirmPhoto(true);
-  };
-
-  const confirmRemovePhoto = () => {
-    setPreview(null);
-    setPicFile(null);
-    setRemovePhoto(true);
-    setShowConfirmPhoto(false);
-    showToast('Photo removed from preview. Click Save Profile to apply.', 'info');
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setPicFile(file);
-      setPreview(URL.createObjectURL(file));
-      setRemovePhoto(false);
-    }
-  };
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    onSave({ ...formData, picFile, removePhoto });
-  };
-
-  return (
-    <motion.div 
-      className="modal-overlay" 
-      onClick={onCancel}
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
-      <AnimatePresence>
-        {showConfirmPhoto && (
-          <motion.div 
-            className="modal-overlay" 
-            style={{ zIndex: 1100 }} 
-            onClick={() => setShowConfirmPhoto(false)}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div 
-              className="modal-card" 
-              onClick={(e) => e.stopPropagation()}
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-            >
-              <h3>Remove Photo</h3>
-              <p>Are you sure you want to remove your profile photo?</p>
-              <div className="modal-actions">
-                <motion.button type="button" className="btn-modal-cancel" onClick={() => setShowConfirmPhoto(false)} whileHover={{ backgroundColor: 'var(--bg-tertiary)' }} whileTap={{ scale: 0.95 }}>Cancel</motion.button>
-                <motion.button type="button" className="btn-modal-delete" onClick={confirmRemovePhoto} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }}>Remove</motion.button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-      <motion.div 
-        className="modal-card profile-modal" 
-        onClick={(e) => e.stopPropagation()}
-        initial={{ y: 20, opacity: 0, scale: 0.95 }}
-        animate={{ y: 0, opacity: 1, scale: 1 }}
-        exit={{ y: 20, opacity: 0, scale: 0.95 }}
-        transition={{ type: "spring", stiffness: 300, damping: 25 }}
-      >
-        <h3>Edit Profile</h3>
-        <form onSubmit={handleSubmit} className="profile-form">
-          <div className="profile-pic-container">
-            <div className="profile-pic-preview">
-              {preview ? <img src={preview} alt="Profile" /> : <div className="pic-placeholder">{formData.name.charAt(0)}</div>}
-
-              <div className="profile-pic-actions">
-                <label className="pic-action-btn upload" title="Update Photo">
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
-                    <circle cx="12" cy="13" r="4" />
-                  </svg>
-                  <input type="file" accept="image/*" onChange={handleFileChange} hidden />
-                </label>
-                {preview && (
-                  <motion.button 
-                    type="button" 
-                    className="pic-action-btn remove" 
-                    onClick={handleRemovePhoto} 
-                    title="Remove Photo"
-                    whileHover={{ scale: 1.15, rotate: 5 }}
-                    whileTap={{ scale: 0.9 }}
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="3 6 5 6 21 6" />
-                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-                    </svg>
-                  </motion.button>
-                )}
-              </div>
-            </div>
-            <p className="pic-hint">Update or remove your profile picture</p>
-          </div>
-
-          <div className="form-group">
-            <label>Full Name</label>
-            <input name="name" value={formData.name} onChange={handleChange} placeholder="Your Name" required />
-          </div>
-          <div className="form-group">
-            <label>Email Address</label>
-            <input type="email" name="email" value={formData.email} onChange={handleChange} placeholder="your@email.com" required />
-          </div>
-          <div className="form-group">
-            <label>Phone Number</label>
-            <input name="phone" value={formData.phone} onChange={handleChange} placeholder="+1 234 567 890" />
-          </div>
-
-          <div className="modal-actions">
-            <motion.button type="button" className="btn-modal-cancel" onClick={onCancel} whileHover={{ backgroundColor: 'var(--bg-tertiary)' }} whileTap={{ scale: 0.95 }}>Cancel</motion.button>
-            <motion.button type="submit" className="btn-save" disabled={isSaving} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }}>
-              {isSaving ? 'Saving...' : 'Save Profile'}
-            </motion.button>
-          </div>
-        </form>
-      </motion.div>
-    </motion.div>
   );
 }
 
@@ -212,9 +69,7 @@ function Sidebar({
   searchQuery,
   onSearchChange,
   isOpen,
-  onClose,
-  user,
-  onOpenProfile
+  onClose
 }) {
   const filteredNotes = notes.filter(n =>
     n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -291,20 +146,6 @@ function Sidebar({
             ))
           )}
         </motion.div>
-
-        <div className="sidebar-footer" onClick={onOpenProfile} style={{ cursor: 'pointer' }}>
-          <div className="footer-avatar">
-            {user?.profilePicture ? (
-              <img src={`${UPLOADS}${user.profilePicture}`} alt="Avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
-            ) : (
-              user?.name?.charAt(0) || 'U'
-            )}
-          </div>
-          <div className="footer-info">
-            <div className="footer-name">{user?.name || 'Guest User'}</div>
-          </div>
-          <div className="settings-cog">⚙️</div>
-        </div>
       </aside>
     </>
   );
@@ -424,7 +265,6 @@ function WelcomeState({ onNewNote }) {
 /* ========== App Root ========== */
 function App() {
   const [notes, setNotes] = useState([]);
-  const [user, setUser] = useState(null);
   const [selectedNoteId, setSelectedNoteId] = useState(null);
   const [mode, setMode] = useState('view');
   const [searchQuery, setSearchQuery] = useState('');
@@ -442,12 +282,8 @@ function App() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [notesRes, userRes] = await Promise.all([
-        axios.get(API_NOTES),
-        axios.get(API_USER)
-      ]);
+      const notesRes = await axios.get(API_NOTES);
       setNotes(notesRes.data.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)));
-      setUser(userRes.data);
     } catch (err) {
       showToast('Connection error', 'error');
     }
@@ -463,30 +299,6 @@ function App() {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
-  };
-
-  const handleProfileSave = async (data) => {
-    setIsSaving(true);
-    const formData = new FormData();
-    formData.append('name', data.name);
-    formData.append('email', data.email);
-    formData.append('phone', data.phone);
-    if (data.picFile) formData.append('profilePicture', data.picFile);
-    if (data.removePhoto) formData.append('removePhoto', 'true');
-
-    try {
-      const res = await axios.put(API_USER, formData);
-      const updatedUser = res.data;
-      setUser(updatedUser);
-
-      await fetchData(); 
-      showToast('Profile updated!', 'success');
-      setModalType(null);
-    } catch (err) {
-      showToast('Failed to update profile', 'error');
-    } finally {
-      setIsSaving(false);
-    }
   };
 
   const handleNoteSave = async (data) => {
@@ -526,8 +338,6 @@ function App() {
         onSearchChange={setSearchQuery}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
-        user={user}
-        onOpenProfile={() => setModalType('profile')}
       />
 
       <main className="main-content">
@@ -569,20 +379,6 @@ function App() {
           )}
         </AnimatePresence>
       </main>
-
-      <AnimatePresence>
-        {modalType === 'profile' && (
-          <ProfileModal
-            user={user}
-            onSave={handleProfileSave}
-            onCancel={() => setModalType(null)}
-            isSaving={isSaving}
-            setUser={setUser}
-            showToast={showToast}
-            fetchData={fetchData}
-          />
-        )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {modalType === 'delete' && selectedNote && (
