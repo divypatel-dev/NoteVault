@@ -9,7 +9,9 @@ const auth = require('../middleware/auth');
 // Multer setup
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/');
+    const dir = path.join(__dirname, '../uploads');
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    cb(null, dir);
   },
   filename: function (req, file, cb) {
     cb(null, Date.now() + path.extname(file.originalname));
@@ -19,19 +21,43 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // Create a note
-router.post('/', auth, upload.single('file'), async (req, res) => {
-  try {
-    const newNote = new Note({
-      title: req.body.title,
-      content: req.body.content,
-      file: req.file ? req.file.filename : undefined,
-      userId: req.userId
-    });
-    const savedNote = await newNote.save();
-    res.json(savedNote);
-  } catch (err) {
-    res.status(500).json({ message: 'Error saving note', error: err.message });
-  }
+router.post('/', auth, (req, res) => {
+  upload.single('file')(req, res, async function (err) {
+    if (err instanceof multer.MulterError) {
+      console.error('Multer Error:', err);
+      return res.status(400).json({ message: 'File upload error', error: err.message });
+    } else if (err) {
+      console.error('Unknown Upload Error:', err);
+      return res.status(500).json({ message: 'Server error during upload', error: err.message });
+    }
+
+    try {
+      console.log('--- CREATE NOTE REQUEST ---');
+      console.log('User ID:', req.userId);
+      console.log('Body:', req.body);
+      console.log('File:', req.file);
+
+      const { title, content } = req.body;
+
+      if (!title || !content) {
+        return res.status(400).json({ message: 'Title and content are required' });
+      }
+
+      const newNote = new Note({
+        title,
+        content,
+        file: req.file ? req.file.filename : undefined,
+        userId: req.userId
+      });
+
+      const savedNote = await newNote.save();
+      console.log('Note saved successfully:', savedNote._id);
+      res.status(201).json(savedNote);
+    } catch (dbErr) {
+      console.error('Database Error:', dbErr);
+      res.status(500).json({ message: 'Error saving to database', error: dbErr.message });
+    }
+  });
 });
 
 // Get all notes
@@ -56,43 +82,57 @@ router.get('/:id', auth, async (req, res) => {
 });
 
 // Update note
-router.put('/:id', auth, upload.single('file'), async (req, res) => {
-  try {
-    console.log('--- PUT REQUEST ---');
-    console.log('req.body:', req.body);
-    console.log('req.file:', req.file);
-    const updateOps = {
-      title: req.body.title,
-      content: req.body.content
-    };
-    
-    const note = await Note.findOne({ _id: req.params.id, userId: req.userId });
-
-    if (req.file) {
-      updateOps.file = req.file.filename;
-      if (note && note.file) {
-        const filePath = path.join(__dirname, '../uploads', note.file);
-        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-      }
-    } else if (req.body.removeImage === 'true' || req.body.removeImage === true) {
-      updateOps.file = '';
-      if (note && note.file) {
-        const filePath = path.join(__dirname, '../uploads', note.file);
-        if (fs.existsSync(filePath)) {
-          fs.unlinkSync(filePath);
-        }
-      }
+router.put('/:id', auth, (req, res) => {
+  upload.single('file')(req, res, async function (err) {
+    if (err instanceof multer.MulterError) {
+      console.error('Multer Error during update:', err);
+      return res.status(400).json({ message: 'File upload error', error: err.message });
+    } else if (err) {
+      console.error('Unknown Upload Error during update:', err);
+      return res.status(500).json({ message: 'Server error during upload', error: err.message });
     }
 
-    const updatedNote = await Note.findOneAndUpdate(
-      { _id: req.params.id, userId: req.userId },
-      { $set: updateOps },
-      { new: true }
-    );
-    res.json(updatedNote);
-  } catch (err) {
-    res.status(500).json({ message: 'Error updating note' });
-  }
+    try {
+      console.log('--- UPDATE NOTE REQUEST ---');
+      console.log('req.body:', req.body);
+      console.log('req.file:', req.file);
+
+      const { title, content, removeImage } = req.body;
+      const updateOps = { title, content };
+
+      const note = await Note.findOne({ _id: req.params.id, userId: req.userId });
+
+      if (req.file) {
+        updateOps.file = req.file.filename;
+        if (note && note.file) {
+          const filePath = path.join(__dirname, '../uploads', note.file);
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        }
+      } else if (removeImage === 'true' || removeImage === true) {
+        updateOps.file = '';
+        if (note && note.file) {
+          const filePath = path.join(__dirname, '../uploads', note.file);
+          if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+        }
+      }
+
+      const updatedNote = await Note.findOneAndUpdate(
+        { _id: req.params.id, userId: req.userId },
+        { $set: updateOps },
+        { new: true }
+      );
+
+      if (!updatedNote) {
+        return res.status(404).json({ message: 'Note not found' });
+      }
+
+      console.log('Note updated successfully:', updatedNote._id);
+      res.json(updatedNote);
+    } catch (dbErr) {
+      console.error('Database Error during update:', dbErr);
+      res.status(500).json({ message: 'Error updating database', error: dbErr.message });
+    }
+  });
 });
 
 // Delete note
