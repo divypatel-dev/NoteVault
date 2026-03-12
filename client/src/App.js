@@ -43,17 +43,37 @@ function DeleteModal({ note, onConfirm, onCancel }) {
       exit={{ opacity: 0 }}
     >
       <motion.div 
-        className="modal-card" 
+        className="modal-card confirm-modal" 
         onClick={(e) => e.stopPropagation()}
         initial={{ scale: 0.9, opacity: 0, y: 20 }}
         animate={{ scale: 1, opacity: 1, y: 0 }}
         exit={{ scale: 0.9, opacity: 0, y: 20 }}
+        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
       >
-        <h3>Delete Note</h3>
-        <p>Are you sure you want to delete "<strong>{note.title}</strong>"?</p>
-        <div className="modal-actions">
-          <motion.button className="btn-modal-cancel" onClick={onCancel} whileHover={{ backgroundColor: 'var(--bg-tertiary)' }} whileTap={{ scale: 0.95 }}>Cancel</motion.button>
-          <motion.button className="btn-modal-delete" onClick={onConfirm} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.95 }}>Delete</motion.button>
+        <div className="modal-icon-wrapper danger-glow">
+          <span className="modal-icon">⚠️</span>
+        </div>
+        <div className="modal-content-center">
+          <h3>Delete Note</h3>
+          <p>This action cannot be undone. Are you sure you want to delete "<strong>{note.title}</strong>"?</p>
+        </div>
+        <div className="modal-footer-actions">
+          <motion.button 
+            className="btn-modal-secondary" 
+            onClick={onCancel}
+            whileHover={{ y: -1, backgroundColor: 'var(--bg-tertiary)' }}
+            whileTap={{ scale: 0.98 }}
+          >
+            Cancel
+          </motion.button>
+          <motion.button 
+            className="btn-modal-danger" 
+            onClick={onConfirm}
+            whileHover={{ y: -1, scale: 1.02, boxShadow: '0 4px 15px rgba(239, 68, 68, 0.3)' }}
+            whileTap={{ scale: 0.98 }}
+          >
+            Delete Permanently
+          </motion.button>
         </div>
       </motion.div>
     </motion.div>
@@ -157,18 +177,20 @@ function NoteEditor({ note, isNew, onSave, onCancel, onDelete, isSaving }) {
   const [content, setContent] = useState(note?.content || '');
   const [imageFile, setImageFile] = useState(null);
   const [preview, setPreview] = useState(note?.file ? `${UPLOADS}${note.file}` : null);
+  const [removeImage, setRemoveImage] = useState(false);
 
   useEffect(() => {
     setTitle(note?.title || '');
     setContent(note?.content || '');
     setPreview(note?.file ? `${UPLOADS}${note.file}` : null);
     setImageFile(null);
+    setRemoveImage(false);
   }, [note]);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!title.trim() || !content.trim()) return;
-    onSave({ title: title.trim(), content: content.trim(), imageFile });
+    onSave({ title: title.trim(), content: content.trim(), imageFile, removeImage });
   };
 
   return (
@@ -192,7 +214,10 @@ function NoteEditor({ note, isNew, onSave, onCancel, onDelete, isSaving }) {
           <input type="file" accept="image/*" onChange={(e) => {
             const file = e.target.files[0];
             setImageFile(file);
-            if (file) setPreview(URL.createObjectURL(file));
+            if (file) {
+              setPreview(URL.createObjectURL(file));
+              setRemoveImage(false);
+            }
           }} hidden />
         </label>
       </div>
@@ -205,7 +230,7 @@ function NoteEditor({ note, isNew, onSave, onCancel, onDelete, isSaving }) {
       {preview && (
         <div className="editor-image-preview">
           <img src={preview} alt="Attachment" />
-          <button type="button" className="remove-image" onClick={() => { setPreview(null); setImageFile(null); }}>✕</button>
+          <button type="button" className="remove-image" onClick={() => { setPreview(null); setImageFile(null); setRemoveImage(true); }}>✕</button>
         </div>
       )}
       <div className="editor-actions">
@@ -307,6 +332,7 @@ function App() {
     formData.append('title', data.title);
     formData.append('content', data.content);
     if (data.imageFile) formData.append('file', data.imageFile);
+    if (data.removeImage) formData.append('removeImage', 'true');
 
     try {
       if (mode === 'new') {

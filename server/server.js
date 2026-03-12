@@ -1,5 +1,4 @@
-require("dotenv").config();   // ✅ ADD THIS LINE
-
+require("dotenv").config();
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
@@ -19,12 +18,12 @@ if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 mongoose.connect(process.env.MONGO_URI)
-.then(() => {
-  console.log("MongoDB Connected");
-})
-.catch(err => {
-  console.error("MongoDB connection error:", err);
-});
+  .then(() => {
+    console.log("MongoDB Connected");
+  })
+  .catch(err => {
+    console.error("MongoDB connection error:", err);
+  });
 
 // Routes
 app.use('/api/notes', notesRoutes);

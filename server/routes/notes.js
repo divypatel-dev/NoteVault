@@ -3,6 +3,7 @@ const router = express.Router();
 const Note = require('../models/Note');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
 // Multer setup
 const storage = multer.diskStorage({
@@ -55,13 +56,33 @@ router.get('/:id', async (req, res) => {
 // Update note
 router.put('/:id', upload.single('file'), async (req, res) => {
   try {
-    const updatedData = {
+    console.log('--- PUT REQUEST ---');
+    console.log('req.body:', req.body);
+    console.log('req.file:', req.file);
+    const updateOps = {
       title: req.body.title,
       content: req.body.content
     };
-    if (req.file) updatedData.file = req.file.filename;
+    
+    const note = await Note.findById(req.params.id);
 
-    const updatedNote = await Note.findByIdAndUpdate(req.params.id, updatedData, { new: true });
+    if (req.file) {
+      updateOps.file = req.file.filename;
+      if (note && note.file) {
+        const filePath = path.join(__dirname, '../uploads', note.file);
+        if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      }
+    } else if (req.body.removeImage === 'true' || req.body.removeImage === true) {
+      updateOps.file = '';
+      if (note && note.file) {
+        const filePath = path.join(__dirname, '../uploads', note.file);
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+        }
+      }
+    }
+
+    const updatedNote = await Note.findByIdAndUpdate(req.params.id, { $set: updateOps }, { new: true });
     res.json(updatedNote);
   } catch (err) {
     res.status(500).json({ message: 'Error updating note' });
@@ -73,6 +94,14 @@ router.delete('/:id', async (req, res) => {
   try {
     const deletedNote = await Note.findByIdAndDelete(req.params.id);
     if (!deletedNote) return res.status(404).json({ message: 'Note not found' });
+    
+    if (deletedNote.file) {
+      const filePath = path.join(__dirname, '../uploads', deletedNote.file);
+      if (fs.existsSync(filePath)) {
+        fs.unlinkSync(filePath);
+      }
+    }
+
     res.json({ message: 'Note deleted successfully' });
   } catch (err) {
     res.status(500).json({ message: 'Error deleting note' });
