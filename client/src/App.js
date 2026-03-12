@@ -4,8 +4,11 @@ import { motion, AnimatePresence } from 'framer-motion';
 import '../../client/src/styles/App.css';
 import logo from './images/logo.png';
 
-const API_NOTES = 'http://localhost:5000/api/notes';
-const UPLOADS = 'http://localhost:5000/uploads/';
+const API_URL = process.env.NODE_ENV === 'production' ? '/api/notes' : 'http://localhost:5000/api/notes';
+const UPLOADS_URL = process.env.NODE_ENV === 'production' ? '/uploads/' : 'http://localhost:5000/uploads/';
+
+const API_NOTES = API_URL;
+const UPLOADS = UPLOADS_URL;
 
 /* ========== Toast System ========== */
 function ToastContainer({ toasts }) {
