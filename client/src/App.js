@@ -1,14 +1,27 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import '../../client/src/styles/App.css';
 import logo from './images/logo.png';
+import Login from './components/Login';
+import Register from './components/Register';
 
-const API_URL = process.env.NODE_ENV === 'production' ? '/api/notes' : 'http://localhost:5000/api/notes';
-const UPLOADS_URL = process.env.NODE_ENV === 'production' ? '/uploads/' : 'http://localhost:5000/uploads/';
+const BASE_URL = process.env.NODE_ENV === 'production' 
+  ? window.location.origin 
+  : 'http://localhost:5000';
 
-const API_NOTES = API_URL;
-const UPLOADS = UPLOADS_URL;
+const API_AUTH = `${BASE_URL}/api/auth`;
+const API_NOTES = `${BASE_URL}/api/notes`;
+const UPLOADS = `${BASE_URL}/uploads/`;
+
+// Configure axios to include token in all requests
+const setAuthToken = (token) => {
+  if (token) {
+    axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  } else {
+    delete axios.defaults.headers.common['Authorization'];
+  }
+};
 
 /* ========== Toast System ========== */
 function ToastContainer({ toasts }) {
@@ -92,7 +105,9 @@ function Sidebar({
   searchQuery,
   onSearchChange,
   isOpen,
-  onClose
+  onClose,
+  username,
+  onLogout
 }) {
   const filteredNotes = notes.filter(n =>
     n.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -108,6 +123,7 @@ function Sidebar({
             <img src={logo} alt="Logo" className="sidebar-logo" />
             <div className="brand-text">
               <h1>NoteVault</h1>
+              <span>{username}</span>
             </div>
           </div>
         </div>
@@ -169,6 +185,17 @@ function Sidebar({
             ))
           )}
         </motion.div>
+
+        <div className="sidebar-footer">
+          <motion.button 
+            className="btn-sidebar-logout" 
+            onClick={onLogout}
+            whileHover={{ scale: 1.01 }}
+            whileTap={{ scale: 0.98 }}
+          >
+            ⏻&nbsp; Logout
+          </motion.button>
+        </div>
       </aside>
     </>
   );
@@ -292,15 +319,37 @@ function WelcomeState({ onNewNote }) {
 
 /* ========== App Root ========== */
 function App() {
+  const [user, setUser] = useState(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [authMode, setAuthMode] = useState('login'); // 'login' | 'register'
   const [notes, setNotes] = useState([]);
   const [selectedNoteId, setSelectedNoteId] = useState(null);
   const [mode, setMode] = useState('view');
   const [searchQuery, setSearchQuery] = useState('');
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [modalType, setModalType] = useState(null); // 'profile' | 'delete'
+  const [modalType, setModalType] = useState(null); // 'delete'
   const [toasts, setToasts] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
+
+  // Initialize auth state
+  useEffect(() => {
+    const initAuth = async () => {
+      const savedUser = localStorage.getItem('user');
+      const savedToken = localStorage.getItem('token');
+      if (savedUser && savedToken) {
+        try {
+          const parsedUser = JSON.parse(savedUser);
+          setAuthToken(savedToken);
+          setUser(parsedUser);
+        } catch (err) {
+          localStorage.clear();
+        }
+      }
+      setIsInitializing(false);
+    };
+    initAuth();
+  }, []);
 
   const showToast = useCallback((message, type = 'info') => {
     const id = Date.now();
@@ -309,24 +358,53 @@ function App() {
   }, []);
 
   const fetchData = useCallback(async () => {
+    if (!user) return;
     try {
       const notesRes = await axios.get(API_NOTES);
       setNotes(notesRes.data.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt)));
     } catch (err) {
-      showToast('Connection error', 'error');
+      if (err.response?.status === 401) {
+        handleLogout();
+        showToast('Session expired. Please login again.', 'error');
+      } else {
+        showToast('Connection error', 'error');
+      }
     }
-  }, [showToast]);
+  }, [user, showToast]);
 
   useEffect(() => {
-    fetchData();
+    if (user) {
+      fetchData();
+    }
     document.documentElement.setAttribute('data-theme', theme);
-    document.querySelector('meta[name="theme-color"]').setAttribute('content', theme === 'dark' ? '#0f0f14' : '#ffffff');
-  }, [fetchData, theme]);
+    const themeColor = document.querySelector('meta[name="theme-color"]');
+    if (themeColor) {
+      themeColor.setAttribute('content', theme === 'dark' ? '#0f0f14' : '#ffffff');
+    }
+  }, [fetchData, theme, user]);
 
   const toggleTheme = () => {
     const newTheme = theme === 'dark' ? 'light' : 'dark';
     setTheme(newTheme);
     localStorage.setItem('theme', newTheme);
+  };
+
+  const handleLogin = (data) => {
+    localStorage.setItem('user', JSON.stringify(data.user));
+    localStorage.setItem('token', data.token);
+    setAuthToken(data.token);
+    setUser(data.user);
+    showToast(`Welcome back, ${data.user.username}!`, 'success');
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+    setAuthToken(null);
+    setUser(null);
+    setNotes([]);
+    setSelectedNoteId(null);
+    setMode('view');
   };
 
   const handleNoteSave = async (data) => {
@@ -356,6 +434,48 @@ function App() {
 
   const selectedNote = notes.find(n => n._id === selectedNoteId);
 
+  // Protected Route: Don't render anything until auth state is checked
+  if (isInitializing) {
+    return (
+      <div className="initializing-screen">
+        <motion.img 
+          src={logo} 
+          alt="Loading..." 
+          initial={{ scale: 0.8, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ repeat: Infinity, duration: 1.5, repeatType: "reverse" }}
+        />
+      </div>
+    );
+  }
+
+  // Auth Screen
+  if (!user) {
+    return (
+      <div className="app-auth-wrapper">
+        {authMode === 'login' ? (
+          <Login 
+            logo={logo} 
+            apiAuth={API_AUTH}
+            onLogin={handleLogin} 
+            onSwitchToRegister={() => setAuthMode('register')} 
+          />
+        ) : (
+          <Register 
+            logo={logo} 
+            apiAuth={API_AUTH}
+            onRegisterSuccess={() => {
+              setAuthMode('login');
+              showToast('Registration successful! Please login.', 'success');
+            }}
+            onSwitchToLogin={() => setAuthMode('login')}
+          />
+        )}
+        <ToastContainer toasts={toasts} />
+      </div>
+    );
+  }
+
   return (
     <div className="app-layout">
       <Sidebar
@@ -367,6 +487,8 @@ function App() {
         onSearchChange={setSearchQuery}
         isOpen={sidebarOpen}
         onClose={() => setSidebarOpen(false)}
+        username={user.username}
+        onLogout={handleLogout}
       />
 
       <main className="main-content">
@@ -427,3 +549,4 @@ function App() {
 }
 
 export default App;
+

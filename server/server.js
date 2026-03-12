@@ -5,6 +5,7 @@ const cors = require('cors');
 const path = require('path');
 const fs = require('fs');
 const notesRoutes = require('./routes/notes');
+const authRoutes = require('./routes/auth');
 
 const app = express();
 app.use(cors());
@@ -26,6 +27,7 @@ mongoose.connect(process.env.MONGO_URI)
   });
 
 // Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/notes', notesRoutes);
 
 // Health check
@@ -42,5 +44,13 @@ if (process.env.NODE_ENV === 'production') {
 }
 
 const PORT = process.env.PORT || 5000;
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
